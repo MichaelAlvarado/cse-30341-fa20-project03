@@ -1,13 +1,15 @@
 /* counters.c: Counters */
 
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 #include "malloc/block.h"
 #include "malloc/counters.h"
 #include "malloc/freelist.h"
 
-#include <assert.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
 
 /* Global Variables */
 
@@ -46,7 +48,13 @@ void init_counters() {
  **/
 double  internal_fragmentation() {
     // TODO: Implement internal fragmentation computation
-    return 0;
+    size_t internalFragmentsSum = 0;
+    Block *currentFreeBlock = FreeList.next;
+    while (currentFreeBlock != &FreeList) {
+        internalFragmentsSum += currentFreeBlock->capacity - currentFreeBlock->size;
+        currentFreeBlock = currentFreeBlock->next;
+    }
+    return Counters[HEAP_SIZE] == 0 ? 0 : internalFragmentsSum/(double)Counters[HEAP_SIZE]*100.0;
 }
 
 /**
@@ -60,7 +68,16 @@ double  internal_fragmentation() {
  **/
 double  external_fragmentation() {
     // TODO: Implement external fragmentation computation
-    return 0;
+    size_t largestFragmentSize = 0;
+    size_t allFreeMemory = 0;
+    Block *currentFreeBlock = FreeList.next;
+    while (currentFreeBlock != &FreeList) {
+        allFreeMemory += currentFreeBlock->capacity;
+        if (currentFreeBlock->capacity > largestFragmentSize)
+            largestFragmentSize = currentFreeBlock->capacity;
+        currentFreeBlock = currentFreeBlock->next;
+    }
+    return allFreeMemory == 0 ? 0 : (1 - (largestFragmentSize/(double)allFreeMemory))*100.0;
 }
 
 /**
@@ -90,6 +107,7 @@ void dump_counters() {
     fdprintf(DumpFD, buffer, "internal:    %4.2lf\n", internal_fragmentation());
     fdprintf(DumpFD, buffer, "external:    %4.2lf\n", external_fragmentation());
 
+//    free_list_dump(DumpFD);
     close(DumpFD);
 }
 

@@ -22,7 +22,14 @@ void *malloc(size_t size) {
 
     // TODO: Search free list for any available block with matching size
     Block *block = block_allocate(size);
-
+    // Block *free_block = free_list_search(size);
+    // if(!free_block){
+    //     return NULL;
+    // }
+    // else{
+    //     Block *split_block = block_split(free_block, size);
+    //     block_detach(split_block);
+    // }
     // Could not find free block or allocate a block, so just return NULL
     if (!block) {
         return NULL;

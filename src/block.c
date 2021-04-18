@@ -1,12 +1,13 @@
 /* block.c: Block Structure */
 
-#include "malloc/block.h"
-#include "malloc/counters.h"
-
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <assert.h>
+
+#include "malloc/block.h"
+#include "malloc/counters.h"
 
 /**
  * Allocate a new block on the heap using sbrk:
@@ -50,11 +51,23 @@ Block *	block_allocate(size_t size) {
  **/
 bool	block_release(Block *block) {
     // TODO: Implement block release
-    // size_t allocated = 0;
-    // Counters[BLOCKS]--;
-    // Counters[SHRINKS]++;
-    // Counters[HEAP_SIZE] -= allocated;
-    return true;
+    bool result = false;
+    size_t allocated = block->capacity + sizeof(Block);
+    Block *currentBreak = sbrk(0);
+    if (currentBreak != SBRK_FAILURE &&
+            block->capacity >= TRIM_THRESHOLD &&
+                (((char*)block) + allocated) == (char*)currentBreak) {
+        block_detach(block);
+        Block * block = sbrk(-allocated);
+        if (block == SBRK_FAILURE) {
+            return NULL;
+        }
+        Counters[BLOCKS]--;
+        Counters[SHRINKS]++;
+        Counters[HEAP_SIZE] -= allocated;
+        result = true;
+    }
+    return result;
 }
 
 /**
@@ -65,6 +78,10 @@ bool	block_release(Block *block) {
  **/
 Block * block_detach(Block *block) {
     // TODO: Detach block from neighbors by updating previous and next block
+    block->prev->next = block->next;
+    block->next->prev = block->prev;
+    block->next = block;
+    block->prev = block;
     return block;
 }
 
@@ -82,9 +99,14 @@ Block * block_detach(Block *block) {
  **/
 bool	block_merge(Block *dst, Block *src) {
     // TODO: Implement block merge
-    // Counters[MERGES]++;
-    // Counters[BLOCKS]--;
-    return false;
+    bool result = false;
+    if ((((intptr_t)dst) + dst->capacity + sizeof(Block)) == ((intptr_t)src)) {
+        dst->capacity = dst->capacity + src->capacity + sizeof(Block);
+        Counters[MERGES]++;
+        Counters[BLOCKS]--;
+        result = true;
+    }
+    return result;
 }
 
 /**
@@ -101,9 +123,35 @@ bool	block_merge(Block *dst, Block *src) {
  **/
 Block * block_split(Block *block, size_t size) {
     // TODO: Implement block split
-    // Counters[SPLITS]++;
-    // Counters[BLOCKS]++;
+    if (block->capacity >= (ALIGN(size) + sizeof(Block) + ALIGN(8))) {
+        Block *newBlock = (Block*)(((intptr_t)block) + ALIGN(size) + sizeof(Block));
+        newBlock->capacity = block->capacity - ALIGN(size) - sizeof(Block);
+        newBlock->size = newBlock->capacity;
+        newBlock->prev = block;
+        newBlock->next = block->next;
+        block->next->prev = newBlock;
+        block->next = newBlock;
+        block->capacity = ALIGN(size);
+        block->size = size;
+        Counters[SPLITS]++;
+        Counters[BLOCKS]++;
+    }
     return block;
+}
+
+/**
+ * Sump a representation of a free block to a file
+ *
+ * @param block the block to dump
+ * @param outFD the descriptor for the output file
+ */
+void    block_dump(Block *block, int outFD) {
+    char buffer[BUFSIZ];
+    fdprintf(outFD, buffer, "--->BLOCK 0x%0lx:\n", (long unsigned int)block);
+    fdprintf(outFD, buffer, "\tCapacity: %ld\n", block->capacity);
+    fdprintf(outFD, buffer, "\tSize: %ld\n", block->size);
+    fdprintf(outFD, buffer, "\tNext: 0x%0lx\n", (long unsigned int)block->next);
+    fdprintf(outFD, buffer, "\tPrev: 0x%0lx\n", (long unsigned int)block->prev);
 }
 
 /* vim: set expandtab sts=4 sw=4 ts=8 ft=c: */
