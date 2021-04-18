@@ -21,15 +21,17 @@ void *malloc(size_t size) {
     }
 
     // TODO: Search free list for any available block with matching size
-    Block *block = block_allocate(size);
-    // Block *free_block = free_list_search(size);
-    // if(!free_block){
-    //     return NULL;
-    // }
-    // else{
-    //     Block *split_block = block_split(free_block, size);
-    //     block_detach(split_block);
-    // }
+
+    Block *block = free_list_search(size);
+
+    if(!block) { //No block available
+        block = block_allocate(size);
+    }
+    else { //block available
+        block = block_split(block, size);
+        block = block_detach(block);
+    }
+
     // Could not find free block or allocate a block, so just return NULL
     if (!block) {
         return NULL;
@@ -62,6 +64,11 @@ void free(void *ptr) {
     Counters[FREES]++;
 
     // TODO: Try to release block, otherwise insert it into the free list
+    Block *block = BLOCK_FROM_POINTER(ptr);
+
+    if (!block_release(block)) {
+        free_list_insert(block);
+    }
 }
 
 /**
@@ -73,8 +80,11 @@ void free(void *ptr) {
  **/
 void *calloc(size_t nmemb, size_t size) {
     // TODO: Implement calloc
-    // Counters[CALLOCS]++;
-    return NULL;
+    Counters[CALLOCS]++;
+    size_t total_size = nmemb * size;
+    void *ptr = malloc(total_size);
+    memset(ptr, 0, total_size);
+    return ptr;
 }
 
 /**
@@ -85,8 +95,29 @@ void *calloc(size_t nmemb, size_t size) {
  **/
 void *realloc(void *ptr, size_t size) {
     // TODO: Implement realloc
-    // Counters[REALLOCS]++;
-    return NULL;
+    Counters[REALLOCS]++;
+
+    if (!ptr) {
+        return malloc(size);
+    }
+
+    if (!size) {
+        free(ptr);
+        return NULL;
+    }
+
+    Block *block = BLOCK_FROM_POINTER(ptr);
+
+    void *new_ptr;
+    new_ptr = malloc(size);
+
+    if (!new_ptr) {
+        return NULL; // TODO: set errno on failure.
+    }
+
+    memcpy(new_ptr, ptr, block->size);
+    free(ptr);
+    return new_ptr;
 }
 
 /* vim: set expandtab sts=4 sw=4 ts=8 ft=c: */
